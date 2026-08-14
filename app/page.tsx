@@ -16,8 +16,18 @@ function formatDuration(seconds: number) {
   return `${minutes}:${remaining.toString().padStart(2, "0")}`;
 }
 
+function formatElapsed(milliseconds: number) {
+  const seconds = milliseconds / 1000;
+  if (seconds < 60) return `${seconds.toFixed(1)}s`;
+  const minutes = Math.floor(seconds / 60);
+  const remaining = Math.floor(seconds % 60);
+  return `${minutes}m ${remaining.toString().padStart(2, "0")}s`;
+}
+
 export default function Home() {
   const inputRef = useRef<HTMLInputElement>(null);
+  const timerRef = useRef<number | null>(null);
+  const startedAtRef = useRef<number | null>(null);
   const [file, setFile] = useState<File | null>(null);
   const [audioUrl, setAudioUrl] = useState("");
   const [duration, setDuration] = useState(0);
@@ -28,6 +38,7 @@ export default function Home() {
   const [dragging, setDragging] = useState(false);
   const [progress, setProgress] = useState(0);
   const [processingStage, setProcessingStage] = useState("");
+  const [elapsedMs, setElapsedMs] = useState(0);
 
   const wordCount = useMemo(
     () => transcript.trim().split(/\s+/).filter(Boolean).length,
@@ -59,6 +70,7 @@ export default function Home() {
     setCopied(false);
     setProgress(0);
     setProcessingStage("");
+    setElapsedMs(0);
   }
 
   function onFileChange(event: ChangeEvent<HTMLInputElement>) {
@@ -81,6 +93,10 @@ export default function Home() {
     setCopied(false);
     setProgress(0);
     setProcessingStage("");
+    setElapsedMs(0);
+    if (timerRef.current !== null) window.clearInterval(timerRef.current);
+    timerRef.current = null;
+    startedAtRef.current = null;
     if (inputRef.current) inputRef.current.value = "";
   }
 
@@ -91,6 +107,12 @@ export default function Home() {
     setCopied(false);
     setProgress(0);
     setProcessingStage("Preparing audio");
+    setElapsedMs(0);
+    startedAtRef.current = performance.now();
+    if (timerRef.current !== null) window.clearInterval(timerRef.current);
+    timerRef.current = window.setInterval(() => {
+      if (startedAtRef.current !== null) setElapsedMs(performance.now() - startedAtRef.current);
+    }, 100);
 
     try {
       const audioContext = new AudioContext();
@@ -136,6 +158,11 @@ export default function Home() {
     } catch (error) {
       setStatus("error");
       setMessage(error instanceof Error ? error.message : "Something went wrong. Please try again.");
+    } finally {
+      if (timerRef.current !== null) window.clearInterval(timerRef.current);
+      timerRef.current = null;
+      if (startedAtRef.current !== null) setElapsedMs(performance.now() - startedAtRef.current);
+      startedAtRef.current = null;
     }
   }
 
@@ -200,7 +227,7 @@ export default function Home() {
               <div className="file-row">
                 <div className="file-icon" aria-hidden="true">♪</div>
                 <div className="file-details"><strong>{file.name}</strong><span>{formatBytes(file.size)} · {formatDuration(duration)}</span></div>
-                <button className="icon-button" type="button" onClick={resetFile} aria-label="Remove audio">×</button>
+                <button className="icon-button" type="button" onClick={resetFile} aria-label="Remove audio" disabled={status === "transcribing"}>×</button>
               </div>
               <audio src={audioUrl} controls onLoadedMetadata={(event) => setDuration(event.currentTarget.duration)} />
             </div>
@@ -221,7 +248,7 @@ export default function Home() {
         <div className="transcript-panel">
           <div className="panel-heading transcript-heading">
             <span className="step">02</span>
-            <div><h2>Your transcript</h2><p>{wordCount ? `${wordCount} words` : "Ready when you are"}</p></div>
+            <div><h2>Your transcript</h2><p>{wordCount ? `${wordCount} words · took ${formatElapsed(elapsedMs)}` : "Ready when you are"}</p></div>
             <div className="actions">
               <button type="button" onClick={downloadTranscript} disabled={!transcript} aria-label="Download transcript">↓ <span>Download</span></button>
               <button className="copy-button" type="button" onClick={copyTranscript} disabled={!transcript}>{copied ? "Copied!" : "Copy text"}</button>
@@ -233,7 +260,7 @@ export default function Home() {
               <div className="processing" aria-live="polite">
                 <div className="wave" aria-hidden="true">{[1,2,3,4,5,6,7,8].map((bar) => <i key={bar} />)}</div>
                 <strong>{processingStage || "Listening closely…"}</strong>
-                <span>{progress ? `${progress}% complete · ` : ""}Keep this tab open while your computer works.</span>
+                <span>{formatElapsed(elapsedMs)} elapsed · {progress ? `${progress}% complete · ` : ""}Keep this tab open.</span>
               </div>
             )}
             {!transcript && status !== "transcribing" ? (
@@ -250,11 +277,11 @@ export default function Home() {
               />
             )}
           </div>
-          <div className="editor-footer"><span>Editable text</span><span>{wordCount} words</span></div>
+          <div className="editor-footer"><span>Editable text</span><span>{status === "done" ? `Transcribed in ${formatElapsed(elapsedMs)} · ` : ""}{wordCount} words</span></div>
         </div>
       </section>
 
-      <footer><span>© 2026 Scribe</span><span>Clear audio makes clearer transcripts.</span></footer>
+      <footer><span>© 2026 Scribe</span><a href="https://github.com/almarinezb/scribe-mp3-transcript" target="_blank" rel="noreferrer">View source on GitHub ↗</a></footer>
     </main>
   );
 }

@@ -10,7 +10,7 @@ export async function generateMetadata(): Promise<Metadata> {
   const requestHeaders = await headers();
   const host = requestHeaders.get("host") || "localhost:3000";
   const protocol = requestHeaders.get("x-forwarded-proto") || (host.startsWith("localhost") ? "http" : "https");
-  const description = "Upload an MP3 and turn speech into an editable, copy-ready transcript.";
+  const description = "Transcribe MP3 files privately on your own computer—no upload or API key required.";
 
   return {
     metadataBase: new URL(`${protocol}://${host}`),

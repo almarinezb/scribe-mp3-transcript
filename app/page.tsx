@@ -5,9 +5,6 @@ import { ChangeEvent, DragEvent, useMemo, useRef, useState } from "react";
 type Status = "idle" | "ready" | "transcribing" | "done" | "error";
 
 const MAX_FILE_SIZE = 50 * 1024 * 1024;
-// Keep each request well below local, hosted, and transcription API body limits.
-const TRANSCRIPTION_CHUNK_SIZE = 4 * 1024 * 1024;
-
 function formatBytes(bytes: number) {
   return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
 }
@@ -24,13 +21,13 @@ export default function Home() {
   const [file, setFile] = useState<File | null>(null);
   const [audioUrl, setAudioUrl] = useState("");
   const [duration, setDuration] = useState(0);
-  const [apiKey, setApiKey] = useState("");
   const [transcript, setTranscript] = useState("");
   const [status, setStatus] = useState<Status>("idle");
   const [message, setMessage] = useState("");
   const [copied, setCopied] = useState(false);
   const [dragging, setDragging] = useState(false);
   const [progress, setProgress] = useState(0);
+  const [processingStage, setProcessingStage] = useState("");
 
   const wordCount = useMemo(
     () => transcript.trim().split(/\s+/).filter(Boolean).length,
@@ -61,6 +58,7 @@ export default function Home() {
     setMessage("");
     setCopied(false);
     setProgress(0);
+    setProcessingStage("");
   }
 
   function onFileChange(event: ChangeEvent<HTMLInputElement>) {
@@ -82,6 +80,7 @@ export default function Home() {
     setMessage("");
     setCopied(false);
     setProgress(0);
+    setProcessingStage("");
     if (inputRef.current) inputRef.current.value = "";
   }
 
@@ -91,42 +90,48 @@ export default function Home() {
     setMessage("");
     setCopied(false);
     setProgress(0);
+    setProcessingStage("Preparing audio");
 
     try {
-      const chunkCount = Math.ceil(file.size / TRANSCRIPTION_CHUNK_SIZE);
-      const parts: string[] = [];
+      const audioContext = new AudioContext();
+      const decoded = await audioContext.decodeAudioData(await file.arrayBuffer());
+      const frameCount = Math.ceil(decoded.duration * 16_000);
+      const offline = new OfflineAudioContext(1, frameCount, 16_000);
+      const source = offline.createBufferSource();
+      source.buffer = decoded;
+      source.connect(offline.destination);
+      source.start();
+      const rendered = await offline.startRendering();
+      const samples = rendered.getChannelData(0).slice();
+      await audioContext.close();
+      setProgress(8);
+      setProcessingStage("Loading local Whisper model");
 
-      for (let index = 0; index < chunkCount; index += 1) {
-        const start = index * TRANSCRIPTION_CHUNK_SIZE;
-        const end = Math.min(start + TRANSCRIPTION_CHUNK_SIZE, file.size);
-        const audioChunk = file.slice(start, end, "audio/mpeg");
-        const formData = new FormData();
-        formData.append("file", audioChunk, `${file.name.replace(/\.mp3$/i, "")}-part-${index + 1}.mp3`);
+      const text = await new Promise<string>((resolve, reject) => {
+        const worker = new Worker(new URL("./transcriber.worker.ts", import.meta.url), { type: "module" });
 
-        const response = await fetch("/api/transcribe", {
-          method: "POST",
-          headers: apiKey ? { "x-openai-key": apiKey.trim() } : undefined,
-          body: formData,
-        });
+        worker.onmessage = (event: MessageEvent<{ type: string; text?: string; message?: string; progress?: number; stage?: string }>) => {
+          const data = event.data;
+          if (data.type === "progress") {
+            if (typeof data.progress === "number") setProgress(data.progress);
+            if (data.stage) setProcessingStage(data.stage);
+          } else if (data.type === "result") {
+            worker.terminate();
+            resolve(data.text || "");
+          } else if (data.type === "error") {
+            worker.terminate();
+            reject(new Error(data.message || "Local transcription failed."));
+          }
+        };
+        worker.onerror = (event) => {
+          worker.terminate();
+          reject(new Error(event.message || "The local transcription engine could not start."));
+        };
+        worker.postMessage({ type: "transcribe", audio: samples }, [samples.buffer]);
+      });
 
-        const contentType = response.headers.get("content-type") || "";
-        const data = contentType.includes("application/json")
-          ? ((await response.json()) as { text?: string; error?: string })
-          : { error: (await response.text()).trim() || `Transcription failed (${response.status}).` };
-
-        if (!response.ok) {
-          const detail = data.error || "Transcription failed.";
-          throw new Error(
-            /payload too large/i.test(detail)
-              ? "One audio segment was rejected as too large. Refresh the page and try again."
-              : detail,
-          );
-        }
-        if (data.text?.trim()) parts.push(data.text.trim());
-        setProgress(Math.round(((index + 1) / chunkCount) * 100));
-      }
-
-      setTranscript(parts.join("\n\n"));
+      setTranscript(text.trim());
+      setProgress(100);
       setStatus("done");
     } catch (error) {
       setStatus("error");
@@ -158,7 +163,7 @@ export default function Home() {
           <span className="brand-mark" aria-hidden="true"><i /><i /><i /><i /></span>
           <span>Scribe</span>
         </a>
-        <div className="privacy-note"><span /> Audio and keys are never saved</div>
+        <div className="privacy-note"><span /> Runs locally on your computer</div>
       </header>
 
       <section className="intro">
@@ -201,15 +206,15 @@ export default function Home() {
             </div>
           )}
 
-          <label className="key-field">
-            <span><b>OpenAI API key</b><small>Used once, never stored</small></span>
-            <input type="password" value={apiKey} onChange={(event) => setApiKey(event.target.value)} placeholder="sk-…  (optional if configured)" autoComplete="off" />
-          </label>
+          <div className="local-engine">
+            <span className="local-engine-icon" aria-hidden="true">⌁</span>
+            <span><b>On-device transcription</b><small>Your MP3 never leaves this browser. The speech model downloads once.</small></span>
+          </div>
 
           {message && <p className="error-message" role="alert">{message}</p>}
 
           <button className="primary-button" type="button" onClick={transcribe} disabled={!file || status === "transcribing"}>
-            {status === "transcribing" ? <><span className="spinner" /> Listening… {progress}%</> : <>Transcribe audio <span>→</span></>}
+            {status === "transcribing" ? <><span className="spinner" /> Working locally… {progress}%</> : <>Transcribe on this computer <span>→</span></>}
           </button>
         </div>
 
@@ -227,8 +232,8 @@ export default function Home() {
             {status === "transcribing" && (
               <div className="processing" aria-live="polite">
                 <div className="wave" aria-hidden="true">{[1,2,3,4,5,6,7,8].map((bar) => <i key={bar} />)}</div>
-                <strong>Listening closely…</strong>
-                <span>{progress ? `${progress}% complete · ` : ""}Longer recordings can take a minute.</span>
+                <strong>{processingStage || "Listening closely…"}</strong>
+                <span>{progress ? `${progress}% complete · ` : ""}Keep this tab open while your computer works.</span>
               </div>
             )}
             {!transcript && status !== "transcribing" ? (

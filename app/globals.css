@@ -69,12 +69,11 @@ h1 em { color: var(--accent); font-weight: 400; }
 .icon-button { border: 0; background: transparent; font-size: 24px; color: var(--muted); cursor: pointer; }
 audio { width: 100%; height: 42px; }
 
-.key-field { margin-top: 18px; display: grid; grid-template-columns: auto 1fr; gap: 15px; align-items: center; }
-.key-field > span { display: flex; flex-direction: column; gap: 2px; white-space: nowrap; }
-.key-field b { font-size: 10px; text-transform: uppercase; letter-spacing: .08em; }
-.key-field small { font-size: 9px; color: var(--muted); }
-.key-field input { min-width: 0; border: 1px solid var(--line); background: #f8f5ee; padding: 10px 11px; outline: none; font-family: var(--font-geist-mono), monospace; font-size: 10px; }
-.key-field input:focus { border-color: var(--ink); }
+.local-engine { margin-top: 18px; padding: 11px 12px; display: flex; align-items: center; gap: 10px; border: 1px solid var(--line); background: rgba(255,255,255,.36); }
+.local-engine-icon { width: 26px; height: 26px; flex: 0 0 auto; display: grid; place-items: center; border-radius: 50%; background: #dfeadf; color: #287044; font-size: 16px; font-weight: 800; }
+.local-engine > span:last-child { display: flex; flex-direction: column; gap: 2px; }
+.local-engine b { font-size: 10px; text-transform: uppercase; letter-spacing: .08em; }
+.local-engine small { font-size: 9px; line-height: 1.35; color: var(--muted); }
 .error-message { margin: 13px 0 0; padding: 9px 11px; color: #a32e18; background: rgba(255,92,53,.08); border-left: 2px solid var(--accent); font-size: 11px; line-height: 1.4; }
 .primary-button { width: 100%; min-height: 49px; margin-top: 18px; border: 0; border-radius: 2px; padding: 0 18px; display: flex; justify-content: center; align-items: center; gap: 10px; background: var(--accent); color: white; font-size: 12px; font-weight: 800; cursor: pointer; transition: .2s; }
 .primary-button:not(:disabled):hover { background: var(--accent-dark); transform: translateY(-1px); }
@@ -123,7 +122,6 @@ footer { padding: 27px 0 32px; display: flex; justify-content: space-between; co
   .transcript-heading { flex-wrap: wrap; }
   .actions { width: 100%; margin: 8px 0 0 42px; }
   .actions button { flex: 1; }
-  .key-field { grid-template-columns: 1fr; gap: 7px; }
   footer span:last-child { display: none; }
 }
 

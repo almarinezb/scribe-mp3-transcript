@@ -1,7 +1,6 @@
 "use client";
 
 import { ChangeEvent, DragEvent, useMemo, useRef, useState } from "react";
-import TranscriberWorker from "./transcriber.worker?worker";
 
 type Status = "idle" | "ready" | "transcribing" | "done" | "error";
 
@@ -109,7 +108,7 @@ export default function Home() {
       setProcessingStage("Loading local Whisper model");
 
       const text = await new Promise<string>((resolve, reject) => {
-        const worker = new TranscriberWorker();
+        const worker = new Worker("/transcriber.worker.js", { type: "module" });
 
         worker.onmessage = (event: MessageEvent<{ type: string; text?: string; message?: string; progress?: number; stage?: string }>) => {
           const data = event.data;

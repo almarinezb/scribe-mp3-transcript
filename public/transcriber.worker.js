@@ -1,14 +1,11 @@
-import { pipeline } from "@huggingface/transformers";
+import { pipeline } from "https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.8.1";
 
-type WorkerRequest = { type: "transcribe"; audio: Float32Array };
-type ProgressInfo = { status?: string; progress?: number };
-
-self.onmessage = async (event: MessageEvent<WorkerRequest>) => {
+self.onmessage = async (event) => {
   if (event.data.type !== "transcribe") return;
 
   try {
-    const hasWebGpu = Boolean((navigator as Navigator & { gpu?: unknown }).gpu);
-    const progressCallback = (info: ProgressInfo) => {
+    const hasWebGpu = Boolean(navigator.gpu);
+    const progressCallback = (info) => {
       if (info.status === "progress" && typeof info.progress === "number") {
         self.postMessage({
           type: "progress",
@@ -22,7 +19,7 @@ self.onmessage = async (event: MessageEvent<WorkerRequest>) => {
       "automatic-speech-recognition",
       "onnx-community/whisper-tiny",
       {
-        ...(hasWebGpu ? { device: "webgpu" as const } : {}),
+        ...(hasWebGpu ? { device: "webgpu" } : {}),
         progress_callback: progressCallback,
       },
     );
@@ -39,9 +36,7 @@ self.onmessage = async (event: MessageEvent<WorkerRequest>) => {
       return_timestamps: true,
     });
     const result = Array.isArray(output) ? output[0] : output;
-    const text = typeof result?.text === "string" ? result.text : "";
-
-    self.postMessage({ type: "result", text });
+    self.postMessage({ type: "result", text: typeof result?.text === "string" ? result.text : "" });
   } catch (error) {
     self.postMessage({
       type: "error",

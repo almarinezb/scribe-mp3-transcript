@@ -7,8 +7,8 @@ export async function POST(request: Request) {
       return Response.json({ error: "No MP3 file was received." }, { status: 400 });
     }
 
-    if (file.size > 50 * 1024 * 1024) {
-      return Response.json({ error: "The MP3 must be smaller than 50 MB." }, { status: 400 });
+    if (file.size > 5 * 1024 * 1024) {
+      return Response.json({ error: "This audio segment is too large." }, { status: 413 });
     }
 
     const suppliedKey = request.headers.get("x-openai-key")?.trim();

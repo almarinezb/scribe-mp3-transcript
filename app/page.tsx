@@ -5,7 +5,8 @@ import { ChangeEvent, DragEvent, useMemo, useRef, useState } from "react";
 type Status = "idle" | "ready" | "transcribing" | "done" | "error";
 
 const MAX_FILE_SIZE = 50 * 1024 * 1024;
-const TRANSCRIPTION_CHUNK_SIZE = 18 * 1024 * 1024;
+// Keep each request well below local, hosted, and transcription API body limits.
+const TRANSCRIPTION_CHUNK_SIZE = 4 * 1024 * 1024;
 
 function formatBytes(bytes: number) {
   return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
@@ -113,7 +114,14 @@ export default function Home() {
           ? ((await response.json()) as { text?: string; error?: string })
           : { error: (await response.text()).trim() || `Transcription failed (${response.status}).` };
 
-        if (!response.ok) throw new Error(data.error || "Transcription failed.");
+        if (!response.ok) {
+          const detail = data.error || "Transcription failed.";
+          throw new Error(
+            /payload too large/i.test(detail)
+              ? "One audio segment was rejected as too large. Refresh the page and try again."
+              : detail,
+          );
+        }
         if (data.text?.trim()) parts.push(data.text.trim());
         setProgress(Math.round(((index + 1) / chunkCount) * 100));
       }

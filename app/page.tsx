@@ -5,6 +5,7 @@ import { ChangeEvent, DragEvent, useMemo, useRef, useState } from "react";
 type Status = "idle" | "ready" | "transcribing" | "done" | "error";
 
 const MAX_FILE_SIZE = 50 * 1024 * 1024;
+const TRANSCRIPTION_CHUNK_SIZE = 18 * 1024 * 1024;
 
 function formatBytes(bytes: number) {
   return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
@@ -28,6 +29,7 @@ export default function Home() {
   const [message, setMessage] = useState("");
   const [copied, setCopied] = useState(false);
   const [dragging, setDragging] = useState(false);
+  const [progress, setProgress] = useState(0);
 
   const wordCount = useMemo(
     () => transcript.trim().split(/\s+/).filter(Boolean).length,
@@ -57,6 +59,7 @@ export default function Home() {
     setStatus("ready");
     setMessage("");
     setCopied(false);
+    setProgress(0);
   }
 
   function onFileChange(event: ChangeEvent<HTMLInputElement>) {
@@ -77,6 +80,7 @@ export default function Home() {
     setStatus("idle");
     setMessage("");
     setCopied(false);
+    setProgress(0);
     if (inputRef.current) inputRef.current.value = "";
   }
 
@@ -85,19 +89,36 @@ export default function Home() {
     setStatus("transcribing");
     setMessage("");
     setCopied(false);
-
-    const formData = new FormData();
-    formData.append("file", file);
+    setProgress(0);
 
     try {
-      const response = await fetch("/api/transcribe", {
-        method: "POST",
-        headers: apiKey ? { "x-openai-key": apiKey.trim() } : undefined,
-        body: formData,
-      });
-      const data = (await response.json()) as { text?: string; error?: string };
-      if (!response.ok) throw new Error(data.error || "Transcription failed.");
-      setTranscript(data.text || "");
+      const chunkCount = Math.ceil(file.size / TRANSCRIPTION_CHUNK_SIZE);
+      const parts: string[] = [];
+
+      for (let index = 0; index < chunkCount; index += 1) {
+        const start = index * TRANSCRIPTION_CHUNK_SIZE;
+        const end = Math.min(start + TRANSCRIPTION_CHUNK_SIZE, file.size);
+        const audioChunk = file.slice(start, end, "audio/mpeg");
+        const formData = new FormData();
+        formData.append("file", audioChunk, `${file.name.replace(/\.mp3$/i, "")}-part-${index + 1}.mp3`);
+
+        const response = await fetch("/api/transcribe", {
+          method: "POST",
+          headers: apiKey ? { "x-openai-key": apiKey.trim() } : undefined,
+          body: formData,
+        });
+
+        const contentType = response.headers.get("content-type") || "";
+        const data = contentType.includes("application/json")
+          ? ((await response.json()) as { text?: string; error?: string })
+          : { error: (await response.text()).trim() || `Transcription failed (${response.status}).` };
+
+        if (!response.ok) throw new Error(data.error || "Transcription failed.");
+        if (data.text?.trim()) parts.push(data.text.trim());
+        setProgress(Math.round(((index + 1) / chunkCount) * 100));
+      }
+
+      setTranscript(parts.join("\n\n"));
       setStatus("done");
     } catch (error) {
       setStatus("error");
@@ -180,7 +201,7 @@ export default function Home() {
           {message && <p className="error-message" role="alert">{message}</p>}
 
           <button className="primary-button" type="button" onClick={transcribe} disabled={!file || status === "transcribing"}>
-            {status === "transcribing" ? <><span className="spinner" /> Listening…</> : <>Transcribe audio <span>→</span></>}
+            {status === "transcribing" ? <><span className="spinner" /> Listening… {progress}%</> : <>Transcribe audio <span>→</span></>}
           </button>
         </div>
 
@@ -199,7 +220,7 @@ export default function Home() {
               <div className="processing" aria-live="polite">
                 <div className="wave" aria-hidden="true">{[1,2,3,4,5,6,7,8].map((bar) => <i key={bar} />)}</div>
                 <strong>Listening closely…</strong>
-                <span>Longer recordings can take a minute.</span>
+                <span>{progress ? `${progress}% complete · ` : ""}Longer recordings can take a minute.</span>
               </div>
             )}
             {!transcript && status !== "transcribing" ? (

@@ -41,6 +41,6 @@ export async function POST(request: Request) {
 
     return Response.json({ text: result.text || "" });
   } catch {
-    return Response.json({ error: "The audio could not be transcribed. Please try again." }, { status: 500 });
+    return Response.json({ error: "The audio upload could not be read. Please try again." }, { status: 400 });
   }
 }

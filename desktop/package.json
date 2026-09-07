@@ -1,0 +1,46 @@
+{
+  "name": "scribe-desktop",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Private, on-device MP3 transcription for Windows",
+  "main": "electron/main.cjs",
+  "scripts": {
+    "dev": "concurrently -k \"vite --config vite.config.ts\" \"wait-on http://127.0.0.1:4173 && cross-env SCRIBE_DEV_URL=http://127.0.0.1:4173 electron .\"",
+    "build:renderer": "vite build --config vite.config.ts",
+    "dist": "npm run build:renderer && electron-builder --win portable",
+    "start": "electron ."
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "@huggingface/transformers": "3.8.1",
+    "@vitejs/plugin-react": "5.0.4",
+    "concurrently": "9.2.1",
+    "cross-env": "10.1.0",
+    "electron": "44.2.0",
+    "electron-builder": "26.15.3",
+    "react": "19.2.0",
+    "react-dom": "19.2.0",
+    "typescript": "5.9.3",
+    "vite": "7.2.2",
+    "wait-on": "9.0.1"
+  },
+  "build": {
+    "appId": "com.almarinezb.scribe",
+    "productName": "Scribe",
+    "asar": true,
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "electron/**/*",
+      "package.json"
+    ],
+    "win": {
+      "target": [
+        "portable"
+      ],
+      "artifactName": "Scribe-${version}-Windows.exe"
+    }
+  }
+}

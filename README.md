@@ -27,6 +27,18 @@ npm run dev
 
 Open [http://localhost:3000](http://localhost:3000).
 
+## Windows desktop app
+
+The standalone, API-key-free desktop edition lives in [`desktop/`](desktop/README.md). Build its portable executable with:
+
+```powershell
+cd desktop
+npm install
+npm run dist
+```
+
+The result is `desktop/release/Scribe-1.0.0-Windows.exe`.
+
 ## Build
 
 ```bash
